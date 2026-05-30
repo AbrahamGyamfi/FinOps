@@ -103,7 +103,7 @@ resource "aws_budgets_budget" "ec2" {
 # Detects unexpected spend spikes per AWS service — fires before a budget threshold
 # is ever crossed, giving earlier warning than budget alerts alone.
 resource "aws_ce_anomaly_monitor" "service" {
-  name              = "finops-service-monitor-${var.suffix}"
+  name              = "Default-Services-Monitor"
   monitor_type      = "DIMENSIONAL"
   monitor_dimension = "SERVICE"
   tags              = var.common_tags

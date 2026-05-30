@@ -27,10 +27,9 @@ resource "aws_ebs_volume" "st1" {
 
 resource "aws_ebs_volume" "io2" {
   availability_zone = local.azs[0]
-  size              = 100
-  type              = "io2"
-  iops              = 3000
-  tags = merge(var.common_tags, { Name = "zombie-ebs-io2-${var.suffix}" })
+  size              = 200
+  type              = "gp3"
+  tags = merge(var.common_tags, { Name = "zombie-ebs-gp3-large-${var.suffix}" })
 }
 
 # ── Unassociated Elastic IPs ──────────────────────────────────────────────────
@@ -66,7 +65,7 @@ resource "aws_security_group" "zombie" {
 
 resource "aws_instance" "idle" {
   ami                    = local.amzn2_id
-  instance_type          = "m5.xlarge"
+  instance_type          = "t3.small"
   subnet_id              = aws_subnet.zombie.id
   vpc_security_group_ids = [aws_security_group.zombie.id]
 
