@@ -191,6 +191,46 @@ else
   ((TOTAL_FINDINGS+=SNAP_COUNT)) || true
 fi
 
+# ── 6. Cost Explorer — Top Services by MTD Spend ─────────────
+hdr "6 / COST EXPLORER — TOP SERVICES  (month-to-date)"
+MONTH_START=$(date -u '+%Y-%m-01')
+TODAY=$(date -u '+%Y-%m-%d')
+
+# Cost Explorer API is always in us-east-1 regardless of working region
+CE_RAW=$(aws $PROFILE_FLAG --region us-east-1 --output json \
+  ce get-cost-and-usage \
+    --time-period Start="${MONTH_START}",End="${TODAY}" \
+    --granularity MONTHLY \
+    --metrics BlendedCost \
+    --group-by Type=DIMENSION,Key=SERVICE 2>/dev/null || echo "{}")
+
+if [[ "$CE_RAW" == "{}" || -z "$CE_RAW" ]]; then
+  echo -e "  ${YEL}!  Cost Explorer unavailable — check ce:GetCostAndUsage permission${RESET}"
+else
+  printf "  %-46s  %s\n" "Service" "Cost (USD)"
+  printf "  %s\n" "$(printf '─%.0s' {1..62})"
+
+  CE_ROWS=$(echo "$CE_RAW" | jq -r '
+    (.ResultsByTime[0].Groups // [])[]
+    | select((.Metrics.BlendedCost.Amount // "0") | tonumber > 0)
+    | [.Keys[0], (.Metrics.BlendedCost.Amount | tonumber * 100 | round / 100 | tostring)]
+    | @tsv
+  ' 2>/dev/null | sort -t$'\t' -k2 -rn | head -10)
+
+  CE_TOTAL=0
+  while IFS=$'\t' read -r svc cost; do
+    [[ -z "$svc" ]] && continue
+    printf "  %-46s  \$%s\n" "$svc" "$cost"
+    CE_TOTAL=$(awk -v a="$CE_TOTAL" -v b="$cost" 'BEGIN{printf "%.2f", a+b}')
+    FINDINGS_JSON=$(echo "$FINDINGS_JSON" | \
+      jq --arg svc "$svc" --arg cost "$cost" \
+      '. += [{"resource_type":"cost_explorer_service","service":$svc,"mtd_cost_usd":$cost,"risk":"INFO"}]')
+  done <<< "$CE_ROWS"
+
+  echo -e "\n  ${BOLD}MTD total (top 10):${RESET} \$$CE_TOTAL"
+  echo -e "  Tip: spikes in EC2/EBS lines confirm zombie assets are billing"
+fi
+
 # ── Executive Summary ─────────────────────────────────────────
 hdr "EXECUTIVE SUMMARY"
 echo -e "  ${BOLD}TOTAL findings : $TOTAL_FINDINGS${RESET}"

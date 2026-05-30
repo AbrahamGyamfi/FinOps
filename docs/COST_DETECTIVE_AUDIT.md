@@ -12,7 +12,7 @@
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [Phase 1 — Analysis & Zombie Asset Cleanup](#phase-1--analysis--zombie-asset-cleanup)
+2. [Phase 1 — Analysis & Zombie Asset Cleanup](#phase-1--analysis--zombie-asset-cleanup) *(includes Cost Explorer CLI + console screenshot guide)*
 3. [Phase 2 — Governance (Budgets + Tagging Policy)](#phase-2--governance-budgets--tagging-policy)
 4. [Phase 2.5 — Cost Anomaly Detection](#phase-25--cost-anomaly-detection)
 5. [Phase 3 — Cost-Aware Architecture (Graviton + Spot ASG)](#phase-3--cost-aware-architecture-graviton--spot-asg)
@@ -141,24 +141,131 @@ The script outputs a `gc_report.json` with every action taken and cost saved.
   TOTAL                        $187.27/mo  (~$2,247.24/yr)
 ```
 
-### 1.5 Manual Checks via AWS Console
+### 1.5 Detecting Waste via Cost Explorer and Trusted Advisor
 
-**Cost Explorer path:**
-`AWS Console → Cost Management → Cost Explorer → Explore costs → Filter by Service / Usage Type`
+#### 1.5.1 Cost Explorer — CLI (automated)
 
-Look for:
-- `EBS:VolumeUsage` lines with no EC2 tag or in `available` state
-- `ElasticIP:IdleAddress` charges
-- `BoxUsage:m5.xlarge` or similar unexplained large-instance charges
+The audit script now calls the Cost Explorer API directly (section 6 of the output):
 
-**Trusted Advisor checks** (Business/Enterprise support required):
-- Low Utilisation Amazon EC2 Instances
-- Unassociated Elastic IP Addresses
-- Underutilised Amazon EBS Volumes
+```bash
+# Pulled automatically by audit_zombie_assets.sh, or run standalone:
+MONTH_START=$(date -u '+%Y-%m-01')
+TODAY=$(date -u '+%Y-%m-%d')
 
-**AWS Config compliance view:**
+aws ce get-cost-and-usage \
+  --region us-east-1 \
+  --time-period Start="${MONTH_START}",End="${TODAY}" \
+  --granularity MONTHLY \
+  --metrics BlendedCost \
+  --group-by Type=DIMENSION,Key=SERVICE \
+  --output table
+```
+
+**What to look for in the output:**
+
+| Line item | What it signals |
+|---|---|
+| `Amazon Elastic Compute Cloud - Compute` spike | Idle or oversized instances billing at full On-Demand rate |
+| `EC2 - Other` (incl. EBS) | Unattached volumes accumulating storage charges |
+| `Amazon EC2 Elastic IP Addresses` | Unassociated EIPs at $3.60/EIP/mo |
+
+#### 1.5.2 Cost Explorer — Console (screenshot evidence)
+
+**Navigation path:**
+`AWS Console → Cost Management → Cost Explorer → Explore costs`
+
+**Screenshot 1 — Service breakdown (inherited account, before cleanup)**
+
+Steps to reproduce:
+1. Set date range to the billing month when waste was first observed
+2. Group by: **Service**
+3. Filter: none (show all)
+4. Look for: `EC2 - Other` and `Elastic Compute Cloud - Compute` dominating the bar chart
+
+> **Expected finding:** EC2 Compute ($154.76) and EC2 Other / EBS ($25.31) account for > 95% of spend, with no meaningful traffic to justify the cost.
+
+---
+*Screenshot 1 placeholder — take during live walkthrough:*
+`Cost Explorer → Group by Service → month of [audit date]`
+
+---
+
+**Screenshot 2 — Usage Type filter (idle EIP charges)**
+
+Steps to reproduce:
+1. Group by: **Usage Type**
+2. Filter by: `Service = EC2-Other`
+3. Look for: `ElasticIP:IdleAddress` line items
+
+---
+*Screenshot 2 placeholder — take during live walkthrough:*
+`Cost Explorer → Group by Usage Type → Filter EC2-Other → spot ElasticIP:IdleAddress`
+
+---
+
+#### 1.5.3 Trusted Advisor — Console (screenshot evidence)
+
+> **Note:** Trusted Advisor cost checks require **Business or Enterprise Support**. On Developer/free tier accounts, use the Cost Explorer CLI evidence above as the equivalent finding.
+
+**Navigation path:**
+`AWS Console → Trusted Advisor → Cost Optimization`
+
+**Checks to screenshot:**
+
+| Check name | Expected finding (sandbox) |
+|---|---|
+| Low Utilization Amazon EC2 Instances | `i-0142f694ca127b8af` (m5.xlarge, 0% CPU) |
+| Unassociated Elastic IP Addresses | `eipalloc-09110719e3f5359c4`, `eipalloc-0eb09eb3fe79ec319` |
+| Underutilized Amazon EBS Volumes | `vol-011feb2b5c4855e95`, `vol-01de5ba9660fad6b8`, `vol-0368484a5b0bf4eb5` |
+
+**Screenshot 3 — Trusted Advisor: Low Utilization EC2**
+
+Steps to reproduce:
+1. Open Trusted Advisor → Cost Optimization
+2. Click **Low Utilization Amazon EC2 Instances**
+3. The idle m5.xlarge instance appears flagged
+
+---
+*Screenshot 3 placeholder — take during live walkthrough*
+
+---
+
+**Screenshot 4 — Trusted Advisor: Unassociated Elastic IPs**
+
+---
+*Screenshot 4 placeholder — take during live walkthrough*
+
+---
+
+#### 1.5.4 AWS Config Compliance View
+
 `AWS Console → Config → Rules → require-costcenter-ec2 → Resources in scope`
-The idle instance `i-0142f694ca127b8af` will appear as NON_COMPLIANT (missing CostCenter tag by design).
+
+The idle instance `i-0142f694ca127b8af` appears as **NON_COMPLIANT** (missing CostCenter tag by design — this is the governance gap the SCP prevents going forward).
+
+**CLI equivalent:**
+```bash
+aws configservice describe-compliance-by-config-rule \
+  --config-rule-names require-costcenter-ec2 \
+  --compliance-types NON_COMPLIANT \
+  --region eu-central-1
+```
+
+#### 1.5.5 Live Walkthrough Checklist
+
+Use this checklist during the demo to ensure all evidence is captured:
+
+- [ ] Run `./scripts/audit_zombie_assets.sh --region eu-central-1` — show terminal output including Cost Explorer section (section 6)
+- [ ] Show `audit_report.json` — confirm zombie assets listed under `findings[]`
+- [ ] Screenshot: Cost Explorer → Group by Service → identify EC2/EBS spike
+- [ ] Screenshot: Cost Explorer → Group by Usage Type → identify `ElasticIP:IdleAddress`
+- [ ] Screenshot (if Business Support): Trusted Advisor → Low Utilization EC2
+- [ ] Screenshot (if Business Support): Trusted Advisor → Unassociated Elastic IPs
+- [ ] Screenshot: AWS Config → `require-costcenter-ec2` → NON_COMPLIANT instance
+- [ ] Run `./scripts/garbage_collector.sh --region eu-central-1` (dry-run) — show cost summary
+- [ ] Run `./scripts/garbage_collector.sh --region eu-central-1 --delete --skip-ec2` — show EBS/EIP deletion
+- [ ] Show AWS Budgets console — two budgets with alert thresholds
+- [ ] Show CloudWatch Dashboard — `FinOps-CostDetective-1bebdb3f` — Spot vs On-Demand split
 
 ---
 
