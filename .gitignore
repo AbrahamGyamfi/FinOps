@@ -1,0 +1,35 @@
+# Terraform state (contains sensitive infrastructure details)
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+tfplan
+
+# Terraform vars (may contain secrets/credentials)
+terraform.tfvars
+*.auto.tfvars
+
+# Terraform internals
+.terraform/
+.terraform.lock.hcl
+
+# Credentials & secrets
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+credentials
+*_credentials.json
+*_secrets.json
+secrets.json
+secrets.yaml
+secrets.yml
+
+# AWS credentials
+.aws/credentials
+.aws/config
+
+# Audit/report outputs (may contain account IDs, resource ARNs)
+audit_report.json
+gc_report.json

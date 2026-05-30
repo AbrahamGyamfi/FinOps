@@ -1,0 +1,12 @@
+output "account_id"          { value = data.aws_caller_identity.current.account_id }
+output "region"              { value = data.aws_region.current.name }
+output "zombie_ebs_volumes"  { value = module.zombie_assets.ebs_volume_ids }
+output "zombie_eips"         { value = module.zombie_assets.eip_allocation_ids }
+output "idle_instance_id"    { value = module.zombie_assets.idle_instance_id }
+output "budget_sns_arn"      { value = module.budgets.sns_topic_arn }
+output "monthly_budget_name" { value = module.budgets.monthly_budget_name }
+output "config_bucket"       { value = module.tagging_governance.config_bucket }
+output "alb_dns_name"          { value = module.compute.alb_dns_name }
+output "asg_name"              { value = module.compute.asg_name }
+output "anomaly_monitor_arn"   { value = module.budgets.anomaly_monitor_arn }
+output "dashboard_name"        { value = aws_cloudwatch_dashboard.finops.dashboard_name }

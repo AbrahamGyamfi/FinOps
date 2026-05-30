@@ -1,0 +1,37 @@
+# Copy to terraform.tfvars and fill in your values.
+# Required (no default):
+budget_alert_email = "you@example.com"
+
+# General
+aws_region  = "us-east-1"
+environment = "sandbox"
+cost_center = "finops-audit"
+
+# Budgets
+budget_limit_usd = "50"
+
+# Networking
+vpc_cidr            = "10.0.0.0/16"
+public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
+
+# ASG sizing
+asg_min_size         = 1
+asg_max_size         = 6
+asg_desired_capacity = 2
+
+# Spot / On-Demand mix
+on_demand_base_capacity         = 1
+on_demand_percentage_above_base = 20  # 20% On-Demand, 80% Spot above base
+
+# Compute
+base_instance_type  = "t3.small"
+root_volume_size_gb = 20
+
+# Scaling policy
+cpu_target_pct            = 60
+min_healthy_percentage    = 50
+health_check_grace_period = 120
+health_check_path         = "/health"
+
+# Scheduled scaling — set true in sandbox to collapse ASG overnight & weekends (~65% saving)
+enable_scheduled_scaling = false

@@ -1,0 +1,49 @@
+{
+  "tagging_policy_version": "1.0",
+  "description": "Mandatory tagging standard for all AWS resources in this account.",
+  "enforcement_date": "2026-05-24",
+  "owner": "FinOps Team",
+  "required_tags": [
+    {
+      "key": "CostCenter",
+      "description": "Billing allocation code (e.g. 'eng-platform', 'data-ml', 'finops-audit')",
+      "allowed_values": "any non-empty string",
+      "enforced_on": ["EC2::Instance", "EC2::Volume", "EC2::EIP", "RDS::Instance", "S3::Bucket"],
+      "enforcement_method": "SCP + AWS Config Rule"
+    },
+    {
+      "key": "Environment",
+      "description": "Deployment tier",
+      "allowed_values": ["sandbox", "dev", "staging", "prod"],
+      "enforced_on": ["EC2::Instance"],
+      "enforcement_method": "AWS Config Rule"
+    },
+    {
+      "key": "ManagedBy",
+      "description": "Provisioning tool for the resource",
+      "allowed_values": ["Terraform", "CloudFormation", "Console", "CDK"],
+      "enforced_on": ["EC2::Instance", "EC2::Volume"],
+      "enforcement_method": "Advisory (Config Rule monitoring only)"
+    },
+    {
+      "key": "Project",
+      "description": "Business project or initiative this resource belongs to",
+      "allowed_values": "any non-empty string",
+      "enforced_on": ["EC2::Instance", "RDS::Instance"],
+      "enforcement_method": "Advisory"
+    }
+  ],
+  "violation_actions": {
+    "preventative": "SCP blocks resource creation if CostCenter tag is absent",
+    "detective": "AWS Config Rule marks resource NON_COMPLIANT within 15 minutes",
+    "notification": "EventBridge → SNS email sent to FinOps team on NON_COMPLIANT event",
+    "remediation_sla": "48 hours to apply missing tags before resource is flagged for shutdown review"
+  },
+  "exemptions": [
+    {
+      "principal": "arn:aws:iam::*:role/BreakGlassRole",
+      "reason": "Emergency access role — must bypass SCP in incident scenarios",
+      "review_date": "2026-11-24"
+    }
+  ]
+}
